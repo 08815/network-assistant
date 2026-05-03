@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>命令速查 - 网工智能助手</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="header">
+    <button class="header-back" onclick="location.href='index.html'">←</button>
+    <h1>命令速查</h1>
+  </div>
+
+  <div class="container">
+    <div class="search-box">
+      <input type="text" id="search-input" placeholder="搜索命令名称或描述...">
+    </div>
+
+    <div class="filter-tags" id="filter-platforms">
+      <div class="filter-tag active" data-platform="">全部</div>
+      <div class="filter-tag" data-platform="Windows">Windows</div>
+      <div class="filter-tag" data-platform="Linux">Linux</div>
+      <div class="filter-tag" data-platform="华为">华为</div>
+      <div class="filter-tag" data-platform="思科">思科</div>
+    </div>
+
+    <div id="commands-list"></div>
+
+    <div style="text-align: center; margin: 20px 0;">
+      <a href="commands-list.html?favorites=1" class="btn btn-secondary">❤️ 我的收藏</a>
+    </div>
+  </div>
+
+  <nav class="bottom-nav">
+    <div class="nav-item" onclick="location.href='index.html'">
+      <span class="icon">🏠</span>
+      <span class="label">首页</span>
+    </div>
+    <div class="nav-item" onclick="location.href='notes-list.html'">
+      <span class="icon">📝</span>
+      <span class="label">笔记</span>
+    </div>
+    <div class="nav-item" onclick="location.href='faults-list.html'">
+      <span class="icon">🔧</span>
+      <span class="label">故障</span>
+    </div>
+    <div class="nav-item active" onclick="location.href='commands-list.html'">
+      <span class="icon">💻</span>
+      <span class="label">命令</span>
+    </div>
+    <div class="nav-item" onclick="location.href='ai-chat.html'">
+      <span class="icon">🤖</span>
+      <span class="label">AI</span>
+    </div>
+  </nav>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="js/data-commands.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    let activePlatform = '';
+    let showFavorites = false;
+
+    function initCommandsList() {
+      const params = new URLSearchParams(window.location.search);
+      showFavorites = params.get('favorites') === '1';
+
+      if (showFavorites) {
+        document.querySelector('.header h1').textContent = '我的收藏';
+      }
+
+      renderCommands();
+      document.getElementById('search-input').addEventListener('input', renderCommands);
+
+      document.querySelectorAll('#filter-platforms .filter-tag').forEach(tag => {
+        tag.addEventListener('click', function() {
+          document.querySelectorAll('#filter-platforms .filter-tag').forEach(t => t.classList.remove('active'));
+          this.classList.add('active');
+          activePlatform = this.dataset.platform;
+          renderCommands();
+        });
+      });
+    }
+
+    function renderCommands() {
+      const searchTerm = document.getElementById('search-input').value.toLowerCase();
+      const favoriteCommands = JSON.parse(localStorage.getItem('favoriteCommands') || '[]');
+
+      let filtered = commandsData.filter(cmd => {
+        const matchSearch = !searchTerm ||
+          cmd.name.toLowerCase().includes(searchTerm) ||
+          cmd.description.toLowerCase().includes(searchTerm);
+
+        const matchPlatform = !activePlatform || cmd.platform.includes(activePlatform);
+
+        const matchFavorite = !showFavorites || favoriteCommands.includes(cmd.id);
+
+        return matchSearch && matchPlatform && matchFavorite;
+      });
+
+      const container = document.getElementById('commands-list');
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="icon">💻</div><p>暂无命令记录</p></div>';
+        return;
+      }
+
+      let html = '';
+      filtered.forEach(cmd => {
+        const isFavorite = favoriteCommands.includes(cmd.id);
+        const desc = cmd.description.length > 30 ? cmd.description.substring(0, 30) + '...' : cmd.description;
+
+        html += `
+          <div class="card" onclick="location.href='command-detail.html?id=${cmd.id}'">
+            <div style="display: flex; justify-content: space-between; align-items: start;">
+              <div style="flex: 1;">
+                <div class="card-title">${cmd.name}</div>
+                <span class="tag">${cmd.platform}</span>
+                <span class="tag">${cmd.category}</span>
+                <div class="card-desc" style="margin-top: 8px;">${desc}</div>
+              </div>
+              <button class="favorite-btn ${isFavorite ? 'active' : ''}" onclick="toggleFavorite(event, ${cmd.id})">
+                ${isFavorite ? '❤️' : '🤍'}
+              </button>
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    function toggleFavorite(event, id) {
+      event.stopPropagation();
+      let favorites = JSON.parse(localStorage.getItem('favoriteCommands') || '[]');
+
+      const index = favorites.indexOf(id);
+      if (index === -1) {
+        favorites.push(id);
+      } else {
+        favorites.splice(index, 1);
+      }
+
+      localStorage.setItem('favoriteCommands', JSON.stringify(favorites));
+      renderCommands();
+    }
+
+    document.addEventListener('DOMContentLoaded', initCommandsList);
+  </script>
+</body>
+</html>

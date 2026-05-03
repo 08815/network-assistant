@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>故障详情 - 网工智能助手</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="header">
+    <button class="header-back" onclick="location.href='faults-list.html'">←</button>
+    <h1>故障详情</h1>
+  </div>
+
+  <div class="container">
+    <div id="fault-detail"></div>
+  </div>
+
+  <nav class="bottom-nav">
+    <div class="nav-item" onclick="location.href='index.html'">
+      <span class="icon">🏠</span>
+      <span class="label">首页</span>
+    </div>
+    <div class="nav-item" onclick="location.href='notes-list.html'">
+      <span class="icon">📝</span>
+      <span class="label">笔记</span>
+    </div>
+    <div class="nav-item active" onclick="location.href='faults-list.html'">
+      <span class="icon">🔧</span>
+      <span class="label">故障</span>
+    </div>
+    <div class="nav-item" onclick="location.href='commands-list.html'">
+      <span class="icon">💻</span>
+      <span class="label">命令</span>
+    </div>
+    <div class="nav-item" onclick="location.href='ai-chat.html'">
+      <span class="icon">🤖</span>
+      <span class="label">AI</span>
+    </div>
+  </nav>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="js/data-notes.js"></script>
+  <script src="js/data-faults.js"></script>
+  <script src="js/data-commands.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    let faultId = null;
+    let isFavorite = false;
+
+    function initFaultDetail() {
+      const params = new URLSearchParams(window.location.search);
+      faultId = parseInt(params.get('id'));
+
+      if (!faultId) {
+        showToast('故障ID无效');
+        return;
+      }
+
+      loadFault();
+    }
+
+    function loadFault() {
+      const fault = faultsData.find(f => f.id === faultId);
+      if (!fault) {
+        showToast('故障不存在');
+        return;
+      }
+
+      const favoriteFaults = JSON.parse(localStorage.getItem('favoriteFaults') || '[]');
+      isFavorite = favoriteFaults.includes(faultId);
+
+      const notes = JSON.parse(localStorage.getItem('notes') || JSON.stringify(notesData));
+      const relatedNotesHtml = fault.relatedNotes.map(id => {
+        const note = notes.find(n => n.id === id);
+        return note ? `<div class="recent-item" onclick="location.href='note-edit.html?id=${note.id}'">
+          <span class="recent-icon">📝</span>
+          <div class="recent-info"><h4>${note.title}</h4></div>
+        </div>` : '';
+      }).filter(Boolean).join('');
+
+      const relatedCommandsHtml = fault.relatedCommands.map(name => {
+        const cmd = commandsData.find(c => c.name.includes(name) || name.includes(c.name));
+        return cmd ? `<div class="recent-item" onclick="location.href='command-detail.html?id=${cmd.id}'">
+          <span class="recent-icon">💻</span>
+          <div class="recent-info"><h4>${cmd.name}</h4><p>${cmd.platform}</p></div>
+        </div>` : '';
+      }).filter(Boolean).join('');
+
+      const stepsHtml = fault.steps.map((step, index) => `
+        <li>${step}<button class="step-copy" onclick="copyText('${step.replace(/'/g, "\\'")}')">📋</button></li>
+      `).join('');
+
+      const html = `
+        <div class="card">
+          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+            <div>
+              <h2 style="font-size: 18px; margin-bottom: 8px;">${fault.title}</h2>
+              <span class="category-badge category-${fault.category}">${fault.category}</span>
+              <span class="difficulty difficulty-${fault.difficulty}" style="margin-left: 8px;"></span>
+            </div>
+            <button class="favorite-btn ${isFavorite ? 'active' : ''}" onclick="toggleFavorite()">
+              ${isFavorite ? '❤️' : '🤍'}
+            </button>
+          </div>
+
+          <h3 style="font-size: 16px; margin: 16px 0 8px;">故障现象</h3>
+          <div class="quote-block">${fault.symptom}</div>
+
+          <h3 style="font-size: 16px; margin: 16px 0 8px;">可能原因</h3>
+          <p>${fault.cause}</p>
+
+          <h3 style="font-size: 16px; margin: 16px 0 8px;">排查步骤</h3>
+          <ol class="step-list">${stepsHtml}</ol>
+
+          <h3 style="font-size: 16px; margin: 16px 0 8px;">相关笔记</h3>
+          ${relatedNotesHtml || '<p style="color: var(--text-secondary);">无相关笔记</p>'}
+
+          <h3 style="font-size: 16px; margin: 16px 0 8px;">相关命令</h3>
+          ${relatedCommandsHtml || '<p style="color: var(--text-secondary);">无相关命令</p>'}
+        </div>
+
+        <div class="card" id="ai-analysis-section" style="display: none;">
+          <h3 style="font-size: 16px; margin-bottom: 12px;">AI智能分析</h3>
+          <div class="form-group">
+            <textarea id="ai-input" placeholder="补充故障现象或问题..." style="min-height: 100px;"></textarea>
+          </div>
+          <button class="btn btn-primary" onclick="submitAIAnalysis()">发送分析</button>
+          <div id="ai-result" style="margin-top: 12px;"></div>
+        </div>
+
+        <div style="display: flex; gap: 12px; margin-top: 16px;">
+          <button class="btn btn-primary" onclick="toggleAISection()">🤖 AI智能分析</button>
+        </div>
+      `;
+
+      document.getElementById('fault-detail').innerHTML = html;
+
+      addToRecent(faultId, 'fault', fault.title);
+    }
+
+    function toggleFavorite() {
+      let favorites = JSON.parse(localStorage.getItem('favoriteFaults') || '[]');
+      const index = favorites.indexOf(faultId);
+
+      if (index === -1) {
+        favorites.push(faultId);
+        isFavorite = true;
+      } else {
+        favorites.splice(index, 1);
+        isFavorite = false;
+      }
+
+      localStorage.setItem('favoriteFaults', JSON.stringify(favorites));
+      loadFault();
+    }
+
+    function toggleAISection() {
+      const section = document.getElementById('ai-analysis-section');
+      section.style.display = section.style.display === 'none' ? 'block' : 'none';
+    }
+
+    async function submitAIAnalysis() {
+      const userInput = document.getElementById('ai-input').value.trim();
+      if (!userInput) {
+        showToast('请输入补充信息');
+        return;
+      }
+
+      const fault = faultsData.find(f => f.id === faultId);
+      const notes = JSON.parse(localStorage.getItem('notes') || JSON.stringify(notesData));
+      const relatedNotesContent = fault.relatedNotes.map(id => {
+        const note = notes.find(n => n.id === id);
+        return note ? `笔记《${note.title}》：${note.content}` : '';
+      }).filter(Boolean).join('\n');
+
+      const prompt = `你是一名资深网络工程师，擅长故障排查。用户可以参考以下笔记内容（如果有）：${relatedNotesContent}当前故障背景：标题：${fault.title}现象：${fault.symptom}已知排查步骤：${fault.steps.join('、')}用户补充现象：${userInput}请基于以上信息，给出进一步的排查建议。要求：1.分步骤说明，每步不超过30字 2.如果涉及命令，给出具体命令和说明 3.如果涉及配置，给出配置示例 4.推荐用户查看相关笔记（如果有）`;
+
+      document.getElementById('ai-result').innerHTML = '<div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>';
+
+      try {
+        const result = await callOpenCodeAI(prompt);
+        document.getElementById('ai-result').innerHTML = `<div class="quote-block">${result.replace(/\n/g, '<br>')}</div>`;
+      } catch (error) {
+        document.getElementById('ai-result').innerHTML = `<p style="color: var(--danger);">AI分析失败：${error.message}</p>`;
+      }
+    }
+
+    async function callOpenCodeAI(prompt) {
+      const apiKey = localStorage.getItem('opencode_api_key');
+
+      if (!apiKey) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        return '根据您描述的故障现象，建议按以下步骤排查：\n1. 检查物理连接：确认网线、端口指示灯正常\n2. 检查配置：对比标准配置模板，确认无遗漏\n3. 使用诊断命令：display interface、display logbuffer\n4. 分段测试：从源到目标逐段ping测试\n5. 查看日志：检查是否有相关错误日志\n\n推荐查看相关笔记获取详细配置说明。';
+      }
+
+      const response = await fetch('https://api.opencode.ai/v1/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'opencode-zen',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.3,
+          max_tokens: 800
+        })
+      });
+
+      if (!response.ok) throw new Error(`API错误：${response.status}`);
+      const data = await response.json();
+      return data.choices[0].message.content;
+    }
+
+    document.addEventListener('DOMContentLoaded', initFaultDetail);
+  </script>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>故障手册 - 网工智能助手</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="header">
+    <button class="header-back" onclick="location.href='index.html'">←</button>
+    <h1>故障手册</h1>
+  </div>
+
+  <div class="container">
+    <div class="search-box">
+      <input type="text" id="search-input" placeholder="搜索故障标题或标签...">
+    </div>
+
+    <div class="filter-tags" id="filter-categories">
+      <div class="filter-tag active" data-category="">全部</div>
+      <div class="filter-tag" data-category="连接类">连接类</div>
+      <div class="filter-tag" data-category="配置类">配置类</div>
+      <div class="filter-tag" data-category="性能类">性能类</div>
+      <div class="filter-tag" data-category="设备类">设备类</div>
+      <div class="filter-tag" data-category="应用类">应用类</div>
+    </div>
+
+    <div id="faults-list"></div>
+
+    <div style="text-align: center; margin: 20px 0;">
+      <a href="faults-list.html?favorites=1" class="btn btn-secondary">❤️ 我的收藏</a>
+    </div>
+  </div>
+
+  <nav class="bottom-nav">
+    <div class="nav-item" onclick="location.href='index.html'">
+      <span class="icon">🏠</span>
+      <span class="label">首页</span>
+    </div>
+    <div class="nav-item" onclick="location.href='notes-list.html'">
+      <span class="icon">📝</span>
+      <span class="label">笔记</span>
+    </div>
+    <div class="nav-item active" onclick="location.href='faults-list.html'">
+      <span class="icon">🔧</span>
+      <span class="label">故障</span>
+    </div>
+    <div class="nav-item" onclick="location.href='commands-list.html'">
+      <span class="icon">💻</span>
+      <span class="label">命令</span>
+    </div>
+    <div class="nav-item" onclick="location.href='ai-chat.html'">
+      <span class="icon">🤖</span>
+      <span class="label">AI</span>
+    </div>
+  </nav>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="js/data-faults.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    let activeCategory = '';
+    let showFavorites = false;
+
+    function initFaultsList() {
+      const params = new URLSearchParams(window.location.search);
+      showFavorites = params.get('favorites') === '1';
+
+      if (showFavorites) {
+        document.querySelector('.header h1').textContent = '我的收藏';
+      }
+
+      renderFaults();
+      document.getElementById('search-input').addEventListener('input', renderFaults);
+
+      document.querySelectorAll('#filter-categories .filter-tag').forEach(tag => {
+        tag.addEventListener('click', function() {
+          document.querySelectorAll('#filter-categories .filter-tag').forEach(t => t.classList.remove('active'));
+          this.classList.add('active');
+          activeCategory = this.dataset.category;
+          renderFaults();
+        });
+      });
+    }
+
+    function renderFaults() {
+      const searchTerm = document.getElementById('search-input').value.toLowerCase();
+      const favoriteFaults = JSON.parse(localStorage.getItem('favoriteFaults') || '[]');
+
+      let filtered = faultsData.filter(fault => {
+        const matchSearch = !searchTerm ||
+          fault.title.toLowerCase().includes(searchTerm) ||
+          fault.tags.some(tag => tag.toLowerCase().includes(searchTerm));
+
+        const matchCategory = !activeCategory || fault.category === activeCategory;
+
+        const matchFavorite = !showFavorites || favoriteFaults.includes(fault.id);
+
+        return matchSearch && matchCategory && matchFavorite;
+      });
+
+      const container = document.getElementById('faults-list');
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="icon">🔧</div><p>暂无故障记录</p></div>';
+        return;
+      }
+
+      let html = '';
+      filtered.forEach(fault => {
+        const isFavorite = favoriteFaults.includes(fault.id);
+        const tagsHtml = fault.tags.slice(0, 3).map(tag => `<span class="tag">${tag}</span>`).join('');
+
+        html += `
+          <div class="card" onclick="location.href='fault-detail.html?id=${fault.id}'">
+            <div style="display: flex; justify-content: space-between; align-items: start;">
+              <div style="flex: 1;">
+                <div class="card-title">${fault.title}</div>
+                <span class="category-badge category-${fault.category}">${fault.category}</span>
+                <span class="difficulty difficulty-${fault.difficulty}"></span>
+                <div style="margin: 8px 0;">${tagsHtml}</div>
+              </div>
+              <button class="favorite-btn ${isFavorite ? 'active' : ''}" onclick="toggleFavorite(event, ${fault.id})">
+                ${isFavorite ? '❤️' : '🤍'}
+              </button>
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    function toggleFavorite(event, id) {
+      event.stopPropagation();
+      let favorites = JSON.parse(localStorage.getItem('favoriteFaults') || '[]');
+
+      const index = favorites.indexOf(id);
+      if (index === -1) {
+        favorites.push(id);
+      } else {
+        favorites.splice(index, 1);
+      }
+
+      localStorage.setItem('favoriteFaults', JSON.stringify(favorites));
+      renderFaults();
+    }
+
+    document.addEventListener('DOMContentLoaded', initFaultsList);
+  </script>
+</body>
+</html>

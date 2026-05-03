@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>命令详情 - 网工智能助手</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="header">
+    <button class="header-back" onclick="location.href='commands-list.html'">←</button>
+    <h1>命令详情</h1>
+  </div>
+
+  <div class="container">
+    <div id="command-detail"></div>
+  </div>
+
+  <nav class="bottom-nav">
+    <div class="nav-item" onclick="location.href='index.html'">
+      <span class="icon">🏠</span>
+      <span class="label">首页</span>
+    </div>
+    <div class="nav-item" onclick="location.href='notes-list.html'">
+      <span class="icon">📝</span>
+      <span class="label">笔记</span>
+    </div>
+    <div class="nav-item" onclick="location.href='faults-list.html'">
+      <span class="icon">🔧</span>
+      <span class="label">故障</span>
+    </div>
+    <div class="nav-item active" onclick="location.href='commands-list.html'">
+      <span class="icon">💻</span>
+      <span class="label">命令</span>
+    </div>
+    <div class="nav-item" onclick="location.href='ai-chat.html'">
+      <span class="icon">🤖</span>
+      <span class="label">AI</span>
+    </div>
+  </nav>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="js/data-notes.js"></script>
+  <script src="js/data-commands.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    let commandId = null;
+    let isFavorite = false;
+
+    function initCommandDetail() {
+      const params = new URLSearchParams(window.location.search);
+      commandId = parseInt(params.get('id'));
+
+      if (!commandId) {
+        showToast('命令ID无效');
+        return;
+      }
+
+      loadCommand();
+    }
+
+    function loadCommand() {
+      const cmd = commandsData.find(c => c.id === commandId);
+      if (!cmd) {
+        showToast('命令不存在');
+        return;
+      }
+
+      const favoriteCommands = JSON.parse(localStorage.getItem('favoriteCommands') || '[]');
+      isFavorite = favoriteCommands.includes(commandId);
+
+      const notes = JSON.parse(localStorage.getItem('notes') || JSON.stringify(notesData));
+      const relatedNotesHtml = cmd.relatedNotes.map(id => {
+        const note = notes.find(n => n.id === id);
+        return note ? `<div class="recent-item" onclick="location.href='note-edit.html?id=${note.id}'">
+          <span class="recent-icon">📝</span>
+          <div class="recent-info"><h4>${note.title}</h4></div>
+        </div>` : '';
+      }).filter(Boolean).join('');
+
+      const examplesHtml = cmd.examples.map((example, index) => `
+        <div class="code-block">
+          <button class="code-copy" onclick="copyText(\`${example.replace(/`/g, '\\`')}\`)">📋 复制</button>
+          <pre>${example}</pre>
+        </div>
+      `).join('');
+
+      const html = `
+        <div class="card">
+          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+            <div>
+              <h2 style="font-size: 18px; margin-bottom: 8px;">${cmd.name}</h2>
+              <span class="tag">${cmd.platform}</span>
+              <span class="tag">${cmd.category}</span>
+            </div>
+            <button class="favorite-btn ${isFavorite ? 'active' : ''}" onclick="toggleFavorite()">
+              ${isFavorite ? '❤️' : '🤍'}
+            </button>
+          </div>
+
+          <h3 style="font-size: 16px; margin: 16px 0 8px;">功能说明</h3>
+          <p>${cmd.description}</p>
+
+          <h3 style="font-size: 16px; margin: 16px 0 8px;">语法</h3>
+          <div class="code-block">
+            <button class="code-copy" onclick="copyText(\`${cmd.syntax.replace(/`/g, '\\`').replace(/\n/g, '\\n')}\`)">📋 复制</button>
+            <pre>${cmd.syntax}</pre>
+          </div>
+
+          <h3 style="font-size: 16px; margin: 16px 0 8px;">使用示例</h3>
+          ${examplesHtml}
+
+          <h3 style="font-size: 16px; margin: 16px 0 8px;">相关笔记</h3>
+          ${relatedNotesHtml || '<p style="color: var(--text-secondary);">无相关笔记</p>'}
+        </div>
+
+        <div style="display: flex; gap: 12px; margin-top: 16px;">
+          <button class="btn btn-primary" onclick="location.href='ai-chat.html?question=${encodeURIComponent(cmd.name + '命令怎么用')}'">🤖 在AI中提问</button>
+        </div>
+      `;
+
+      document.getElementById('command-detail').innerHTML = html;
+
+      addToRecent(commandId, 'command', cmd.name);
+    }
+
+    function toggleFavorite() {
+      let favorites = JSON.parse(localStorage.getItem('favoriteCommands') || '[]');
+      const index = favorites.indexOf(commandId);
+
+      if (index === -1) {
+        favorites.push(commandId);
+        isFavorite = true;
+      } else {
+        favorites.splice(index, 1);
+        isFavorite = false;
+      }
+
+      localStorage.setItem('favoriteCommands', JSON.stringify(favorites));
+      loadCommand();
+    }
+
+    document.addEventListener('DOMContentLoaded', initCommandDetail);
+  </script>
+</body>
+</html>
